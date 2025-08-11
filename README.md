@@ -8,38 +8,6 @@
 ![Node.js](https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white)
 ![Sentry](https://img.shields.io/badge/Sentry-362D59?style=for-the-badge&logo=sentry&logoColor=white)
 
-## 🎯 What This Example Teaches
-
-This example demonstrates the **"Goldilocks Principle"** of tracing - not too many spans, not too few, but just right. You'll learn:
-
-1. **When to create spans** vs when to use attributes
-2. **How to trace async operations** within a single service
-3. **How to design meaningful attributes** that enable powerful queries
-4. **How to avoid over-instrumentation** that creates noise without value
-5. **Real-world patterns** that scale from simple apps to complex systems
-
-## 🏗️ Architecture - Simple & Educational
-
-```
-┌─────────────────┐         ┌─────────────────┐
-│    Frontend     │ ──────> │     Backend     │
-│  (React + Vite) │         │ (Express + Jobs)│
-│ localhost:5173  │ <────── │ localhost:3001  │
-└─────────────────┘         └─────────────────┘
-        │                           │
-        └───────────────────────────┘
-                    │
-            ┌──────────────┐
-            │    Sentry    │
-            │   (Tracing)  │
-            └──────────────┘
-
-📊 The 3 Essential Spans:
-1. file.upload    → User uploads file (Frontend)
-2. upload.receive → Server validates upload (Backend)  
-3. media.process  → Async processing (Backend)
-```
-
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -68,7 +36,27 @@ npm run dev
 # Backend: http://localhost:3001
 ```
 
-That's it! No complex setup, no worker configuration, just two services that teach you everything.
+## 🏗️ Architecture
+
+```
+┌─────────────────┐         ┌─────────────────┐
+│    Frontend     │ ──────> │     Backend     │
+│  (React + Vite) │         │ (Express + Jobs)│
+│ localhost:5173  │ <────── │ localhost:3001  │
+└─────────────────┘         └─────────────────┘
+        │                           │
+        └───────────────────────────┘
+                    │
+            ┌──────────────┐
+            │    Sentry    │
+            │   (Tracing)  │
+            └──────────────┘
+
+📊 The 3 Essential Spans:
+1. file.upload    → User uploads file (Frontend)
+2. upload.receive → Server validates upload (Backend)  
+3. media.process  → Async processing (Backend)
+```
 
 ## 📚 The 3-Span Pattern Explained
 
@@ -130,153 +118,41 @@ Sentry.startSpan({
 })
 ```
 
-## 🚫 Anti-Patterns This Example Avoids
+## 📊 Queries Enabled
 
-### ❌ Over-Instrumentation
-**Don't**: Create a span for every function
-```typescript
-// BAD - Too many spans
-startSpan('validateFile')
-startSpan('checkFileSize')
-startSpan('checkFileType')
-startSpan('generatePreview')
-```
-
-**Do**: Use attributes on meaningful spans
-```typescript
-// GOOD - One span with attributes
-startSpan('upload.receive', {
-  attributes: {
-    'validation.file_size': 'pass',
-    'validation.file_type': 'pass',
-    'validation.preview_generated': true
-  }
-})
-```
-
-### ❌ Span Explosion
-**Don't**: Create separate spans for each processing step
-```typescript
-// BAD - Unnecessary span proliferation
-startSpan('scan.virus')
-startSpan('optimize.image')
-startSpan('generate.thumbnail')
-startSpan('convert.format')
-```
-
-**Do**: One processing span with detailed attributes
-```typescript
-// GOOD - Single span tells the whole story
-startSpan('media.process', {
-  attributes: {
-    'processing.operations': ['optimize', 'thumbnail'],
-    'optimization.level': 'high',
-    'thumbnail.generated': true,
-    'formats.created': ['webp', 'jpg']
-  }
-})
-```
-
-### ❌ Missing Context
-**Don't**: Create spans with no attributes
-```typescript
-// BAD - What can we learn from this?
-startSpan('process')
-```
-
-**Do**: Rich attributes that enable powerful queries
-```typescript
-// GOOD - Queryable, filterable, actionable
-startSpan('media.process', {
-  attributes: {
-    'media.size_bucket': 'large',      // Filterable
-    'processing.duration_ms': 2500,    // Measurable
-    'customer.tier': 'premium',        // Segmentable
-    'result.cached': false              // Debuggable
-  }
-})
-```
-
-## 📊 Powerful Queries Enabled
-
-Because we use rich attributes instead of excessive spans, you can answer important questions:
+Because we use attributes, you can answer important questions directly in Sentry Trace Explorer:
 
 ### Performance Analysis
-```sql
--- p95 upload time by file size
-SELECT 
-  percentile(span.duration, 95) as p95_duration,
-  span.data['file.size_bucket']
-FROM spans
-WHERE op = 'file.upload'
-GROUP BY span.data['file.size_bucket']
-```
+- **Dataset**: Spans
+- **Filter**: `op:file.upload`
+- **Y-Axis**: `p95(span.duration)`
+- **Group by**: `span.data["file.mime_type"]`
+- Optional: switch to time series to see trends of `p95(span.duration)` over time.
+
+To analyze processing time by size bucket:
+- **Dataset**: Spans
+- **Filter**: `op:media.process`
+- **Y-Axis**: `p95(span.duration)`
+- **Group by**: `span.data["media.size_bucket"]`
 
 ### Success Rates
-```sql
--- Processing success rate by operation
-SELECT 
-  count_if(span.data['result.status'] = 'success') / count() as success_rate,
-  span.data['processing.operations']
-FROM spans  
-WHERE op = 'media.process'
-GROUP BY span.data['processing.operations']
-```
+- **Dataset**: Spans
+- **Filter**: `op:media.process`
+- **Columns/Functions**:
+  - `count()`
+  - `count_if(span.data["result.status"] == "success")` as `successes`
+  - Add a Formula column: `successes / count()` as `success_rate`
+- **Group by**: `span.data["processing.operations"]`
 
 ### Business Metrics
-```sql
--- Average storage saved through optimization
-SELECT
-  avg(span.data['result.size_saved_bytes']) as avg_bytes_saved,
-  sum(span.data['result.size_saved_bytes']) as total_bytes_saved
-FROM spans
-WHERE op = 'media.process'
-  AND span.data['result.status'] = 'success'
-```
-
-## 🎓 Learning Exercises
-
-### Exercise 1: Add a New Attribute
-Add a `compression.ratio` attribute to the processing span. Think about:
-- Is this better as a new span or an attribute?
-- What values make it queryable?
-- How does it help debugging?
-
-### Exercise 2: Implement Caching
-Add caching detection to the upload flow:
-- Should cache hits create new spans?
-- What attributes would help you monitor cache effectiveness?
-- How would you query cache hit rates?
-
-### Exercise 3: Add User Context
-Enhance spans with user segmentation:
-- Add `user.tier` (free/pro/enterprise) attributes
-- Track `user.monthly_uploads` count
-- Monitor performance by user segment
-
-## 🔄 How This Pattern Scales
-
-### Current (Simple & Educational)
-```
-Frontend → Backend (with async processing)
-- 3 spans across 2 services
-- In-process async handling
-- Perfect for learning and small apps
-```
-
-### Future (Production Scale)
-```
-Frontend → API Gateway → Backend → Queue → Workers → Storage
-- Same 3 core span types, distributed across services
-- Add spans only at service boundaries
-- Rich attributes remain the same
-```
-
-The patterns you learn here apply whether you have 2 services or 200!
+- **Dataset**: Spans
+- **Filter**: `op:media.process` and `span.data["result.status"]:success`
+- **Y-Axis**: 
+  - `avg(span.data["result.size_saved_bytes"])` as `avg_bytes_saved`
+  - `sum(span.data["result.size_saved_bytes"])` as `total_bytes_saved`
+- **Optional breakdowns**: `span.data["media.size_bucket"]`, `span.data["processing.optimization_level"]`
 
 ## 🛠️ Technical Details
-
-> **Important**: This example uses Sentry SDK v10 which requires the backend to import `instrument.ts` before any other code. This ensures proper initialization of tracing and profiling.
 
 ### Frontend (React + TypeScript)
 - **Framework**: React 18 with TypeScript
@@ -295,7 +171,6 @@ The patterns you learn here apply whether you have 2 services or 200!
 
 ### Key Design Decisions
 - **No proxy**: Frontend makes direct API calls (real-world pattern)
-- **No external dependencies**: No Redis, no S3, just Node.js
 - **TypeScript throughout**: Type safety and better IDE support
 - **Single backend service**: Simpler to understand and run
 
@@ -314,51 +189,7 @@ The patterns you learn here apply whether you have 2 services or 200!
 - **File Size Impact**: Performance correlation with `file.size_bucket`
 - **Optimization Effectiveness**: Average `result.size_saved_bytes`
 
-## 🤔 Frequently Asked Questions
-
-### Q: Why only 3 spans?
-**A**: These 3 spans represent the essential boundaries in most applications: user interaction, API handling, and async processing. More spans often add noise without insight.
-
-### Q: Should I create a span for database queries?
-**A**: Sentry's auto-instrumentation handles database queries. Create manual spans only for business-logic operations.
-
-### Q: How do I know if I have too many spans?
-**A**: If you have more than 10-15 spans in a typical trace, you're probably over-instrumenting. If span names describe implementation details rather than business operations, consolidate them.
-
-### Q: When should I use a new span vs an attribute?
-**A**: New span if: crossing a network boundary, starting async work, or beginning a major business operation. Attribute if: adding context, recording a metric, or noting a decision.
-
 ## 🚢 Deployment Considerations
 
 ### For Learning/Development
-The current setup is perfect - just run `npm run dev`
-
-### For Production
-1. Build the frontend: `cd frontend && npm run build`
-2. Run the backend with: `cd backend && npm start` (uses tsx directly)
-3. Use PM2 or similar for process management
-4. Add real cloud storage (S3, GCS) when needed
-5. Add real queue (Bull, SQS) when scale demands it
-
-## 🤝 Contributing
-
-This is an educational example - contributions that make it clearer or teach better patterns are welcome! Please:
-
-1. Keep the 3-span pattern
-2. Don't add external service dependencies
-3. Focus on teaching value over features
-4. Include comments explaining decisions
-
-## 📚 Additional Resources
-
-- [Sentry Distributed Tracing Docs](https://docs.sentry.io/product/sentry-basics/distributed-tracing/)
-- [OpenTelemetry Span Best Practices](https://opentelemetry.io/docs/concepts/signals/traces/)
-- [When to Use Spans vs Metrics vs Logs](https://docs.sentry.io/product/sentry-basics/concepts/)
-
-## 📄 License
-
-MIT - Use this example to learn and build better instrumented applications!
-
----
-
-**Remember**: Good tracing isn't about quantity - it's about capturing the right information at the right boundaries. Less is often more! 🎯
+The current setup is perfect - just run `npm run de
