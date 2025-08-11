@@ -1,4 +1,4 @@
-# 📸 SnapTrace - Learn Sentry Tracing with a Real App
+# 📸 SnapTrace - Learn Sentry Tracing For Media Upload Perofrmance
 
 **SnapTrace** is an educational media upload application that demonstrates Sentry distributed tracing best practices through a simple, beautiful photo sharing app. Upload images, watch them appear in a masonry gallery, and learn how to instrument your applications effectively.
 
